@@ -34,8 +34,11 @@ import com.infopae.model.SendAnalyticsData;
 import com.infopae.model.SendSensorData;
 
 import java.util.ArrayList;
+import java.util.Locale;
+import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import br.pucrio.inf.lac.mhub.R;
 import br.pucrio.inf.lac.mhub.adapters.NavigationDrawerAdapter;
@@ -47,8 +50,12 @@ import br.pucrio.inf.lac.mhub.model_server.Sensor;
 import br.pucrio.inf.lac.mhub.model_server.User;
 import br.pucrio.inf.lac.mhub.models.ConnectionData;
 import br.pucrio.inf.lac.mhub.models.NavigationItem;
+import br.pucrio.inf.lac.mhub.models.base.QueryMessage;
+import br.pucrio.inf.lac.mhub.models.locals.SensorData;
+import br.pucrio.inf.lac.mhub.models.queries.MEPAQuery;
 import br.pucrio.inf.lac.mhub.network.NetworkUtil;
 import br.pucrio.inf.lac.mhub.services.LocationService;
+import br.pucrio.inf.lac.mhub.services.MEPAService;
 import br.pucrio.inf.lac.mhub.services.S2PAService;
 import de.greenrobot.event.EventBus;
 import io.reactivex.android.schedulers.AndroidSchedulers;

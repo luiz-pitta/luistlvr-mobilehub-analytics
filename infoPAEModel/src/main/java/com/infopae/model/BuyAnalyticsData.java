@@ -7,6 +7,7 @@ public class BuyAnalyticsData implements Serializable {
     private static final long serialVersionUID = 25L;
 
     private int option;
+    private double value;
     private String macAddress;
     private String uuidData, uuidIotrade, uuidAnalyticsHub;
 
@@ -33,6 +34,10 @@ public class BuyAnalyticsData implements Serializable {
         return macAddress;
     }
 
+    public double getValue() {
+        return value;
+    }
+
     public void setUuidData( String uuidData ) {
         this.uuidData = uuidData;
     }
@@ -51,6 +56,10 @@ public class BuyAnalyticsData implements Serializable {
 
     public void setOption( int option ) {
         this.option = option;
+    }
+
+    public void setValue( double value ) {
+        this.value = value;
     }
 
 }

@@ -50,6 +50,31 @@ public class MEPAQuery extends QueryMessage {
         return this.event;
     }
 
+    /** Setters */
+    public void setType(ACTION type) {
+        this.type = type;
+    }
+
+    public void setObject(ITEM object) {
+        this.object = object;
+    }
+
+    public void setTarget(ROUTE target) {
+        this.target = target;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
+    }
+
+    public void setRule(String rule) {
+        this.rule = rule;
+    }
+
+    public void setEvent(Map<String, Object> event) {
+        this.event = event;
+    }
+
     public void fromJSON( JsonReader reader ) throws IOException, IllegalArgumentException {
         reader.beginObject();
         while( reader.hasNext() ) {

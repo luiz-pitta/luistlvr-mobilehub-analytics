@@ -30,11 +30,13 @@ import br.pucrio.inf.lac.mhub.components.AppConfig;
 import br.pucrio.inf.lac.mhub.components.AppUtils;
 import br.pucrio.inf.lac.mhub.components.Statistics;
 import br.pucrio.inf.lac.mhub.models.base.LocalMessage;
+import br.pucrio.inf.lac.mhub.models.base.QueryMessage;
 import br.pucrio.inf.lac.mhub.models.locals.EventData;
 import br.pucrio.inf.lac.mhub.models.locals.LocationData;
 import br.pucrio.inf.lac.mhub.models.locals.MatchmakingData;
 import br.pucrio.inf.lac.mhub.models.locals.MessageData;
 import br.pucrio.inf.lac.mhub.models.locals.SensorData;
+import br.pucrio.inf.lac.mhub.models.queries.MEPAQuery;
 import br.pucrio.inf.lac.mhub.services.listeners.ConnectionListener;
 import de.greenrobot.event.EventBus;
 import lac.cnclib.net.NodeConnection;
@@ -292,6 +294,15 @@ public class ConnectionService extends Service {
 			int position = getUuidIoTrade(arrayList, uuidClientAnalytics);
 
 			if (position >= 0) {
+				BuyAnalyticsData buyAnalyticsData = arrayList.get(position);
+				if(buyAnalyticsData.getOption() == 1){
+					MEPAQuery mepa = new MEPAQuery();
+					mepa.setLabel(uuidClientAnalytics);
+					mepa.setObject(QueryMessage.ITEM.RULE);
+					mepa.setType(QueryMessage.ACTION.REMOVE);
+					EventBus.getDefault().post(mepa);
+				}
+
 				arrayList.remove(position);
 				map.put(uuidData, arrayList);
 
@@ -326,12 +337,15 @@ public class ConnectionService extends Service {
 
 		listUuid.add(uuidClient);
 
+		SensorData sensorData = new SensorData();
+		sensorData.setSensorName(uuidClient);
+		sensorData.setSensorValue(data.get( (data.size()-1) ));
+		sensorData.setRoute(MEPAService.ROUTE_TAG);
+
 		if(uuid.equals("f000aa01-0451-4000-b000-000000000000")){
 			//"Temperatura"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}else if(option == CUSTOM1){
 				Statistics statisticsAmbient, statisticsTarget;
 				double[] ambient = new double[data.size()];
@@ -363,15 +377,11 @@ public class ConnectionService extends Service {
 			//"Acelerômetro"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}
 		} else if(uuid.equals("f000aa21-0451-4000-b000-000000000000")){
 			//"Humidade"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}else if(option == CUSTOM1){
 				Statistics statistics;
 				double[] humidity = new double[data.size()];
@@ -391,15 +401,11 @@ public class ConnectionService extends Service {
 			//"Magnetômetro"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}
 		} else if(uuid.equals("f000aa41-0451-4000-b000-000000000000")){
 			//"Barômetro"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}else if(option == CUSTOM1){
 				Statistics statistics;
 				double[] barometer = new double[data.size()];
@@ -419,26 +425,23 @@ public class ConnectionService extends Service {
 			//"Giroscópio"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}
 		} else if(uuid.equals("f000aa71-0451-4000-b000-000000000000")){
 			//"Luxímetro"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}
 		} else if(uuid.equals("f000aa81-0451-4000-b000-000000000000")){
 			//"Movimento"
 			if(option == GRAPH){
 				sendSensorData.setListData(data);
-			}else if(option == ALERT){
-
 			}
 		}
 
-		createAndSendMsg(sendSensorData, this.uuid);
+		if(option != ALERT)
+			createAndSendMsg(sendSensorData, this.uuid);
+		else
+			EventBus.getDefault().post(sensorData);
 	}
 
 	@SuppressWarnings("unused") //receives event from connection listner
@@ -464,6 +467,40 @@ public class ConnectionService extends Service {
 			}
 			mActiveRequestOption.put(macAddress, map);
 		}
+
+		if(buyAnalyticsData.getOption() == 1){
+			double value = buyAnalyticsData.getValue();
+			MEPAQuery mepa = new MEPAQuery();
+			mepa.setLabel(buyAnalyticsData.getUuidIotrade());
+			mepa.setObject(QueryMessage.ITEM.RULE);
+			mepa.setTarget(QueryMessage.ROUTE.GLOBAL);
+			mepa.setType(QueryMessage.ACTION.ADD);
+			mepa.setRule(generateCEPRule(macAddress, uuidData, buyAnalyticsData.getUuidIotrade(), value));
+			EventBus.getDefault().post(mepa);
+		}
+	}
+
+	//generate cep rule
+	private String generateCEPRule(String mac, String uuidData, String uuidlabel, double value){
+		String begin = "SELECT ";
+		String rule = " FROM SensorData (sensorName = '" + uuidlabel + "') WHERE ";
+		int length;
+		ArrayList<Double[]> list = mActiveRequest.get(mac).get(uuidData);
+		if(list != null && list.size() > 0)
+			length = list.get(0).length;
+		else
+			length = 1;
+
+		for(int i=0;i<length;i++){
+			begin += "sensorValue[" + i + "]";
+			rule += "sensorValue[" + i + "] > " + value;
+			if(length > 1 && i < (length - 1)) {
+				begin += ", ";
+				rule += " OR ";
+			}
+		}
+
+		return begin + rule;
 	}
 
     /**
@@ -675,8 +712,8 @@ public class ConnectionService extends Service {
     @SuppressWarnings("unused") // it's actually used to receive events from the MEPA Service
     public void onEvent( EventData eventData ) {
         // Look if the message is for this service
-        //if( eventData != null && AppUtils.isInRoute( ROUTE_TAG, eventData.getRoute() ) )
-		//	createAndQueueMsg( eventData, uuid );
+        if( eventData != null && AppUtils.isInRoute( ROUTE_TAG, eventData.getRoute() ) )
+			createAndQueueMsg( eventData, uuid );
     }
 
     @SuppressWarnings("unused") // it's actually used to receive error events
