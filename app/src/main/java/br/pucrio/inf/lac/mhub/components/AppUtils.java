@@ -268,11 +268,11 @@ public class AppUtils {
 	}
 
     /**
-     * It gets the UUID saved inside the Shared Preferences.
+     * It gets the internet signal.
      *
      * @param c The Context of the Android system.
-     * @return UUID It returns the UUID saved.
-     *         null There is no UUID save inside the Shared Preferences.
+     * @return Level of internet between 0 and 10.
+     *         -2 There is no internet available.
      */
     public static int getInternetSignal(Context c) {
         ConnectivityManager connManager = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -319,10 +319,11 @@ public class AppUtils {
     }
 
     /**
-     * It gets the UUID saved inside the Shared Preferences.
+     * It gets the battery percentage.
      *
-     * @return UUID It returns the UUID saved.
-     *         null There is no UUID save inside the Shared Preferences.
+	 * @param c The Context of the Android system.
+     * @return battery percentage.
+     *
      */
     public static int getBatteryPercentage(Context c) {
 

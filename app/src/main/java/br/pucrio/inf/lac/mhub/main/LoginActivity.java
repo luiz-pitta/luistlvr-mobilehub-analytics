@@ -8,7 +8,6 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import br.pucrio.inf.lac.mhub.Constants;
 import br.pucrio.inf.lac.mhub.R;
 import br.pucrio.inf.lac.mhub.components.AppConfig;
 import br.pucrio.inf.lac.mhub.model_server.Response;
@@ -20,9 +19,13 @@ import io.reactivex.schedulers.Schedulers;
 
 public class LoginActivity extends AppCompatActivity implements View.OnClickListener {
 
+    /** GUI Controllers */
     private TextView loginButton, name;
 
+    /** Shared Preferences object */
     private SharedPreferences mSharedPreferences;
+
+    /** Component to make server request */
     private CompositeDisposable mSubscriptions;
 
     @Override
@@ -54,10 +57,17 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
         super.onStop();
     }
 
+    /**
+     * The method used to initiate shared preferences.
+     */
     private void initSharedPreferences() {
         mSharedPreferences = getSharedPreferences(AppConfig.SHARED_PREF_FILE, MODE_PRIVATE);
     }
 
+    /**
+     * The method used to login user into the analytics hub.
+     * @param usr The new location object.
+     */
     private void loginProcess(User usr) {
 
         mSubscriptions.add(NetworkUtil.getRetrofit().login(usr)
@@ -66,6 +76,11 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
                 .subscribe(this::handleResponse,this::handleError));
     }
 
+    /**
+     * Callback called when login returns successfully.
+     *
+     * @param response register into shared preferences that user has logged in and starts main activity.
+     */
     private void handleResponse(Response response) {
         SharedPreferences.Editor editor = mSharedPreferences.edit();
         editor.putString(AppConfig.NAME, name.getText().toString());
@@ -74,6 +89,11 @@ public class LoginActivity extends AppCompatActivity implements View.OnClickList
         startActivity(new Intent(LoginActivity.this, MHubSettings.class));
     }
 
+    /**
+     * Callback called when login returns with error.
+     *
+     * @param error returns the error.
+     */
     private void handleError(Throwable error) {
 
     }

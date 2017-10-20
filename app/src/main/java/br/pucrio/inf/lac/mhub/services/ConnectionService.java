@@ -5,12 +5,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.BatteryManager;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
 
+import com.google.gson.Gson;
 import com.infopae.model.BuyAnalyticsData;
 import com.infopae.model.SendAnalyticsData;
 import com.infopae.model.SendSensorData;
@@ -86,6 +88,7 @@ public class ConnectionService extends Service {
     /** The interval time between messages to be sent */
     private Integer sendAllMsgsInterval;
 
+	/** Types of analytics services */
 	private final static int GRAPH = 0;
 	private final static int ALERT = 1;
 	private final static int CUSTOM1 = 2;
@@ -95,12 +98,13 @@ public class ConnectionService extends Service {
 	private final ConcurrentHashMap<String, Message> lstMsg = new ConcurrentHashMap<>();
 	//private final ConcurrentLinkedQueue<Message> lstMsg = new ConcurrentLinkedQueue<>();
 
-	/** Active Sensor Times */
+	/** Active Sensor Data */
 	private ConcurrentHashMap<String, ConcurrentHashMap<String, ArrayList<Double[]>>> mActiveRequest = new ConcurrentHashMap<>();
-	//macAddress				//uuidData		//uuidClient
+								//macAddress				//uuidData		//uuidClient
 
+	/** Active Analytics User */
 	private ConcurrentHashMap<String, ConcurrentHashMap<String, ArrayList<BuyAnalyticsData>>> mActiveRequestOption = new ConcurrentHashMap<>();
-	//macAddress				//uuidData		//Option selected
+								//macAddress				//uuidData		//Option selected
 	
 	/** The Local Broadcast Manager */
 	private LocalBroadcastManager lbm;
@@ -155,8 +159,19 @@ public class ConnectionService extends Service {
 	public void onDestroy() {
 		super.onDestroy();
         AppUtils.logger( 'i', TAG, ">> Destroyed" );
+
 		// not connected
 		isConnected = false;
+
+		SendSensorData sendSensorData = new SendSensorData();
+		sendSensorData.setData(null);
+		sendSensorData.setListData(null);
+		sendSensorData.setSource(SendSensorData.ANALYTICS_HUB);
+		sendSensorData.setUuidClients(getAllUuidList());
+
+		if(sendSensorData.getUuidClients().size() > 0)
+			createAndSendMsg(sendSensorData, uuid);
+
 		// unregister broadcasts 
 		unregisterBroadcasts();
         // unregister from event bus
@@ -242,91 +257,13 @@ public class ConnectionService extends Service {
 		}
 	}
 
-	@SuppressWarnings("unused") //receives event from connection listner
-	public void onEventMainThread( SendAnalyticsData sendAnalyticsData ) {
-		Double[] data = sendAnalyticsData.getData();
-		String macAddress = sendAnalyticsData.getMacAddress();
-		String uuidData = sendAnalyticsData.getUuid();
-
-		if (!mActiveRequest.containsKey(macAddress)) {
-			ConcurrentHashMap<String, ArrayList<Double[]>> map = new ConcurrentHashMap<>();
-			ArrayList<Double[]> arrayList = new ArrayList<>();
-			arrayList.add(data);
-			map.put(uuidData, arrayList);
-			mActiveRequest.put(macAddress, map);
-		} else {
-			ConcurrentHashMap<String, ArrayList<Double[]>> map = mActiveRequest.get(macAddress);
-			ArrayList<Double[]> arrayList = new ArrayList<>();
-			if (map.containsKey(uuidData)) {
-				arrayList = map.get(uuidData);
-				arrayList.add(data);
-			} else {
-				arrayList.add(data);
-				map.put(uuidData, arrayList);
-			}
-			mActiveRequest.put(macAddress, map);
-		}
-
-		if(mActiveRequestOption.containsKey(macAddress)){
-			ConcurrentHashMap<String, ArrayList<BuyAnalyticsData>> map = mActiveRequestOption.get(macAddress);
-			if(map.containsKey(uuidData)){
-				ArrayList<BuyAnalyticsData> list = map.get(uuidData);
-				ArrayList<String> listUuid = new ArrayList<>();
-				for(int i=0;i<list.size();i++){
-					BuyAnalyticsData buyAnalyticsData = list.get(i);
-					calculateOption(buyAnalyticsData, uuidData, macAddress);
-				}
-			}
-		}
-	}
-
-	@SuppressWarnings("unused") //receives event from connection listner
-	public void onEvent( MatchmakingData matchmakingData ) {
-		String uuidMatch = matchmakingData.getUuidMatch();
-		String macAddress = matchmakingData.getMacAddress();
-		String uuidData = matchmakingData.getUuidData();
-		String uuidClient = matchmakingData.getUuidClient();
-		String uuidClientAnalytics = matchmakingData.getUuidAnalyticsClient();
-
-		if(matchmakingData.getStartStop() == MatchmakingData.STOP) {
-			ConcurrentHashMap<String, ArrayList<BuyAnalyticsData>> map = mActiveRequestOption.get(macAddress);
-			ArrayList<BuyAnalyticsData> arrayList = map.get(uuidData);
-			int position = getUuidIoTrade(arrayList, uuidClientAnalytics);
-
-			if (position >= 0) {
-				BuyAnalyticsData buyAnalyticsData = arrayList.get(position);
-				if(buyAnalyticsData.getOption() == 1){
-					MEPAQuery mepa = new MEPAQuery();
-					mepa.setLabel(uuidClientAnalytics);
-					mepa.setObject(QueryMessage.ITEM.RULE);
-					mepa.setType(QueryMessage.ACTION.REMOVE);
-					EventBus.getDefault().post(mepa);
-				}
-
-				arrayList.remove(position);
-				map.put(uuidData, arrayList);
-
-				if(arrayList.size() == 0) {
-					ConcurrentHashMap<String, ArrayList<Double[]>> mapInfo = mActiveRequest.get(macAddress);
-					if (mapInfo.containsKey(uuidData))
-						mapInfo.remove(uuidData);
-				}
-			}
-		}
-	}
-
-	private int getUuidIoTrade(ArrayList<BuyAnalyticsData> arrayList, String uuidClientAnalytics){
-		for(int i=0;i<arrayList.size();i++){
-			BuyAnalyticsData buyAnalyticsData = arrayList.get(i);
-			if(buyAnalyticsData.getUuidIotrade().equals(uuidClientAnalytics)) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
-	//calculate analytics
-	private void calculateOption(BuyAnalyticsData buyAnalyticsData, String uuid, String macAddress){
+	/**
+	 * Calculates and sends the analysed data to IoTrade user
+	 * @param macAddress MacAddress of sensor to be observed
+	 * @param uuid UUID Data of sensor
+	 * @param buyAnalyticsData Information of IoTrade user to be sent data
+	 */
+	private void calculateOption(BuyAnalyticsData buyAnalyticsData, String uuid, String macAddress, long interval){
 		SendSensorData sendSensorData = new SendSensorData();
 		ArrayList<String> listUuid = new ArrayList<>();
 		ArrayList<Double[]> data = mActiveRequest.get(macAddress).get(uuid);
@@ -334,6 +271,7 @@ public class ConnectionService extends Service {
 		int option = buyAnalyticsData.getOption();
 
 		sendSensorData.setUuidClients(listUuid);
+		sendSensorData.setInterval(interval);
 
 		listUuid.add(uuidClient);
 
@@ -440,11 +378,105 @@ public class ConnectionService extends Service {
 
 		if(option != ALERT)
 			createAndSendMsg(sendSensorData, this.uuid);
-		else
+		else {
+			sendSensorData.setListData(new ArrayList<>());
+			sendSensorData.setData(null);
+			createAndSendMsg(sendSensorData, this.uuid);
 			EventBus.getDefault().post(sensorData);
+		}
 	}
 
-	@SuppressWarnings("unused") //receives event from connection listner
+	@SuppressWarnings("unused") //receives event from connection listner to removes a sensor data and IoTrade user
+	public void onEvent( MatchmakingData matchmakingData ) {
+		String uuidMatch = matchmakingData.getUuidMatch();
+		String macAddress = matchmakingData.getMacAddress();
+		String uuidData = matchmakingData.getUuidData();
+		String uuidClient = matchmakingData.getUuidClient();
+		String uuidClientAnalytics = matchmakingData.getUuidAnalyticsClient();
+		boolean ack = matchmakingData.isAck();
+
+		if(ack)
+			createAndSendMsg( "a" + uuidClientAnalytics, uuid);
+
+		if(matchmakingData.getStartStop() == MatchmakingData.STOP) {
+			ConcurrentHashMap<String, ArrayList<BuyAnalyticsData>> map = mActiveRequestOption.get(macAddress);
+			ArrayList<BuyAnalyticsData> arrayList = map.get(uuidData);
+			int position = getUuidIoTrade(arrayList, uuidClientAnalytics);
+
+			if (position >= 0) {
+				BuyAnalyticsData buyAnalyticsData = arrayList.get(position);
+				if(buyAnalyticsData.getOption() == 1){
+					MEPAQuery mepa = new MEPAQuery();
+					mepa.setLabel(uuidClientAnalytics);
+					mepa.setObject(QueryMessage.ITEM.RULE);
+					mepa.setType(QueryMessage.ACTION.REMOVE);
+					EventBus.getDefault().post(mepa);
+				}
+
+				arrayList.remove(position);
+				map.put(uuidData, arrayList);
+
+				if(arrayList.size() == 0) {
+					ConcurrentHashMap<String, ArrayList<Double[]>> mapInfo = mActiveRequest.get(macAddress);
+					if (mapInfo.containsKey(uuidData))
+						mapInfo.remove(uuidData);
+				}
+			}
+		}
+	}
+
+    @SuppressWarnings("unused") //receives event from NetworkMonitoring service to removes a sensor data and IoTrade user
+    public void onEvent( String string ) {
+        if( string != null ) {
+            switch (string){
+                case "no_internet":
+                    mActiveRequestOption.clear();
+                    mActiveRequest.clear();
+                    break;
+            }
+        }
+    }
+
+	@SuppressWarnings("unused") //receives event from connection listner and stores sensor data
+	public void onEventMainThread( SendAnalyticsData sendAnalyticsData ) {
+		Double[] data = sendAnalyticsData.getData();
+		String macAddress = sendAnalyticsData.getMacAddress();
+		String uuidData = sendAnalyticsData.getUuid();
+		long interval = sendAnalyticsData.getInterval();
+
+		if (!mActiveRequest.containsKey(macAddress)) {
+			ConcurrentHashMap<String, ArrayList<Double[]>> map = new ConcurrentHashMap<>();
+			ArrayList<Double[]> arrayList = new ArrayList<>();
+			arrayList.add(data);
+			map.put(uuidData, arrayList);
+			mActiveRequest.put(macAddress, map);
+		} else {
+			ConcurrentHashMap<String, ArrayList<Double[]>> map = mActiveRequest.get(macAddress);
+			ArrayList<Double[]> arrayList = new ArrayList<>();
+			if (map.containsKey(uuidData)) {
+				arrayList = map.get(uuidData);
+				arrayList.add(data);
+			} else {
+				arrayList.add(data);
+				map.put(uuidData, arrayList);
+			}
+			mActiveRequest.put(macAddress, map);
+		}
+
+		if(mActiveRequestOption.containsKey(macAddress)){
+			ConcurrentHashMap<String, ArrayList<BuyAnalyticsData>> map = mActiveRequestOption.get(macAddress);
+			if(map.containsKey(uuidData)){
+				ArrayList<BuyAnalyticsData> list = map.get(uuidData);
+				ArrayList<String> listUuid = new ArrayList<>();
+				for(int i=0;i<list.size();i++){
+					BuyAnalyticsData buyAnalyticsData = list.get(i);
+					calculateOption(buyAnalyticsData, uuidData, macAddress, interval);
+				}
+			}
+		}
+	}
+
+	@SuppressWarnings("unused") //receives event from connection listner and register an user purchase
 	public void onEventMainThread( BuyAnalyticsData buyAnalyticsData ) {
 		String macAddress = buyAnalyticsData.getMacAddress();
 		String uuidData = buyAnalyticsData.getUuidData();
@@ -480,7 +512,14 @@ public class ConnectionService extends Service {
 		}
 	}
 
-	//generate cep rule
+	/**
+	 * Creates a cep rule to generate alerts based on a value passed as a parameter
+	 * @param mac MacAddress of sensor to be observed
+	 * @param uuidData UUID Data of sensor
+	 * @param uuidlabel UUID of IoTrade user to serve as an identifier
+	 * @param value The value to generate an alert
+	 * @return cep rule
+	 */
 	private String generateCEPRule(String mac, String uuidData, String uuidlabel, double value){
 		String begin = "SELECT ";
 		String rule = " FROM SensorData (sensorName = '" + uuidlabel + "') WHERE ";
@@ -721,11 +760,42 @@ public class ConnectionService extends Service {
         //createAndQueueMsg( messageData, uuid );
     }
 
-	@SuppressWarnings("unused")
+	@SuppressWarnings("unused")	// it's actually used to receive events from the Connection Listener
 	public void onEvent( SendSensorData sendSensorData ) {
 		if( sendSensorData != null ) {
 			createAndSendMsg( sendSensorData, uuid );
 		}
+	}
+
+	/**
+	 * @return Returns all IoTrade users UUID that are registered to this analytics hub
+	 */
+	private ArrayList<String> getAllUuidList() {
+		ArrayList<String> list = new ArrayList<>();
+		for (String key : mActiveRequestOption.keySet()) {
+			for (String key2 : mActiveRequestOption.get(key).keySet()) {
+				ArrayList<BuyAnalyticsData> arrayList = mActiveRequestOption.get(key).get(key2);
+				for(BuyAnalyticsData buyAnalyticsData : arrayList){
+					list.add(buyAnalyticsData.getUuidIotrade());
+				}
+			}
+		}
+		return list;
+	}
+
+	/**
+	 * @param arrayList List of IoTrade Users.
+	 * @param uuidClientAnalytics IoTrade User UUID to be found on the list
+	 * @return Returns position of IoTrade user in the list
+	 */
+	private int getUuidIoTrade(ArrayList<BuyAnalyticsData> arrayList, String uuidClientAnalytics){
+		for(int i=0;i<arrayList.size();i++){
+			BuyAnalyticsData buyAnalyticsData = arrayList.get(i);
+			if(buyAnalyticsData.getUuidIotrade().equals(uuidClientAnalytics)) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
     /**

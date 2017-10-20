@@ -137,7 +137,7 @@ public class AdaptationService extends Service {
 
         if( deviceName != null ) {
             try {
-                /*final String componentClass = DEVICE_PACKAGE + deviceName;
+                final String componentClass = DEVICE_PACKAGE + deviceName;
 
                 Class<?> c = Class.forName( componentClass );
                 TechnologyDevice componentInstance = (TechnologyDevice) c.newInstance();
@@ -149,36 +149,12 @@ public class AdaptationService extends Service {
 
                 Bundle resultData = new Bundle();
                 resultData.putSerializable( EXTRA_RESULT, componentInstance );
-                receiver.send( SUCCESS, resultData );*/
-                Sensor sensor = new Sensor();
-                sensor.setMacAddress(device.macAddress);
-                //isSensorRegistered(sensor);
+                //receiver.send( SUCCESS, resultData );
             } catch(Throwable e) {
                 AppUtils.logger( 'e', TAG, e.getMessage() );
                 receiver.send( FAILED, null );
             }
         } else
             receiver.send( FAILED, null );
-    }
-
-    private void isSensorRegistered(Sensor sensor) {
-
-        mSubscriptions.add(NetworkUtil.getRetrofit().getSensorRegistered(sensor)
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribeOn(Schedulers.io())
-                .subscribe(this::handleResponse,this::handleError));
-    }
-
-    private void handleResponse(Response response) {
-        if(response.getMessage().equals("YES")) {
-            Bundle resultData = new Bundle();
-            resultData.putSerializable( EXTRA_RESULT, new SensorWrapper(response.getSensors()) );
-            receiver.send( SUCCESS, resultData );
-        }else
-            receiver.send( FAILED, null );
-    }
-
-    private void handleError(Throwable error) {
-
     }
 }

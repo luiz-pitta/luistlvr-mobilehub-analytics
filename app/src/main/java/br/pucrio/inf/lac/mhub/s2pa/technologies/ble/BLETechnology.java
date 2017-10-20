@@ -133,9 +133,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
 		mDeviceSensorTimes = new ConcurrentHashMap<>();
 		mActiveRequest = new ConcurrentHashMap<>();
 		mBlackListDevices = new ArrayList<>();
-
-		// register to event bus
-		EventBus.getDefault().register( this );
 		
 		mTimerHandler = new Handler();
 
@@ -198,9 +195,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
 		stopMonitoringRssiValue();
 		
 		ac.unregisterReceiver( mReceiver );
-
-		// unregister from event bus
-		EventBus.getDefault().unregister( this );
 
         if( scanner != null ) {
             scanner.stop();
@@ -311,33 +305,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
 	    AppUtils.logger( 'w', TAG, "Attempt to disconnect in state: " + connectionState );
 		return false;
 	}
-
-	@SuppressWarnings("unused")
-	public void onEvent( MatchmakingData matchmakingData ) {
-	}
-
-	private void updateSensorParameters(Sensor sensor) {
-
-		mSubscriptions.add(NetworkUtil.getRetrofit().setSensorParameters(sensor)
-				.observeOn(AndroidSchedulers.mainThread())
-				.subscribeOn(Schedulers.io())
-				.subscribe(this::handleResponse,this::handleError));
-	}
-
-	private void removeSensorMobileHub(Sensor sensor) {
-
-		mSubscriptions.add(NetworkUtil.getRetrofit().removeSensorMobileHub(sensor)
-				.observeOn(AndroidSchedulers.mainThread())
-				.subscribeOn(Schedulers.io())
-				.subscribe(this::handleResponse,this::handleError));
-	}
-
-    private void handleResponse(Response response) {
-    }
-
-    private void handleError(Throwable error) {
-
-    }
 	
 	@Override
 	public void readSensorValue( String macAddress, String serviceName ) {
@@ -508,8 +475,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
             mMOUUID      = new MOUUID( ID, macAddress );
 			mServices    = new ArrayList<>();
 			mActionQueue = new ConcurrentLinkedQueue<>();
-
-			EventBus.getDefault().register( this );
  		}
  	    
  		@Override
@@ -554,59 +519,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
             sOperationsQueue.remove( mDevice );
  		}
 
- 		private int isServiceIn(UUID service, ArrayList<Sensor> list){
-			for(int i = 0;i<list.size();i++){
-				Sensor sensor = list.get(i);
-				if(service.toString().equals(sensor.getUuidSer()))
-					return i;
-			}
-			return -1;
-		}
-
-		private boolean isActuator(UUID service, ArrayList<Sensor> list){
-			for(int i = 0;i<list.size();i++){
-				Sensor sensor = list.get(i);
-				if(service.toString().equals(sensor.getUuidSer()))
-					return sensor.isActuator();
-			}
-			return false;
-		}
-
-        private void convertSensorData(Sensor sensor) {
-
-            mSubscriptions.add(NetworkUtil.getRetrofit().convertSensorData(sensor)
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribeOn(Schedulers.io())
-                    .subscribe(this::handleResponseData,this::handleError));
-        }
-
-        private void handleError(Throwable error) {
-
-        }
-
-        private void handleResponseData(Response response) {
-            Double[] data = response.getData();
-			ArrayList<String> listClients = mActiveRequest.get(response.getMacAddress()).get(response.getUuid());
-
-			SendSensorData sendSensorData = new SendSensorData();
-			sendSensorData.setData(data);
-			sendSensorData.setUuidClients(listClients);
-
-			EventBus.getDefault().post( sendSensorData );
-
-            //if( data != null )
-            //    listener.onMObjectValueRead( mMOUUID, mRSSI, getSensorCategory(list, response.getUuid()), data );
-        }
-
-        private String getSensorCategory(ArrayList<Sensor> list, String uuidData){
-            for(int i = 0;i < list.size(); i++){
-                String uuid = list.get(i).getUuidData();
-                if(uuid.equals(uuidData))
-                    return list.get(i).getName();
-            }
-            return null;
-        }
-
         @Override
         public void onServicesDiscovered( BluetoothGatt gatt, int status ) {
         	final String macAddress = gatt.getDevice().getAddress();
@@ -616,19 +528,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
          	if( status == BluetoothGatt.GATT_SUCCESS ) {
          		AppUtils.logger( 'i', TAG, "=>Services Discovered: " + macAddress );
                 // Get the module for the device
-             	ArrayList<Sensor> listSensors = mDeviceModules.get( deviceName );
-            	// Loop through the services
-                for( BluetoothGattService serv : gatt.getServices() ) {
-                    // Get the sensor(s) of a service by its UUID
-                    int isSensorFound = isServiceIn(serv.getUuid(), listSensors);
-					// Check if actuator
-					boolean isActuator = isActuator(serv.getUuid(), listSensors);
-                    // Enable the sensors and add to the sensor's list
-                    if( isSensorFound >= 0 && !isActuator)
-						subscribe(gatt, listSensors.get(isSensorFound));
-					else if(isSensorFound >= 0 && isActuator)
-						activate(gatt, listSensors.get(isSensorFound));
-                }
                 // Inform to the S2PA Service
              	listener.onMObjectServicesDiscovered( mMOUUID, mServices );
                 // Continue with the next operation
@@ -658,7 +557,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
 			}
 			/* Send sensor value and continue with next BLE operation */
 			else {
-				sendSensorValue( gatt, characteristic );
 				queue( new BLENone() );
 			}
         }
@@ -698,16 +596,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
                 allowedRssi = AppUtils.getCurrentSignalAllowedMO( ac );
         		if( mRSSI < allowedRssi )
         			queueOperation( new BLEDisconnect( mGatt ) );
-				else {
-                    if (SystemClock.elapsedRealtime() - mLastClickTime >= TIME_UPDATE_REFRESH2){
-                        mLastClickTime = SystemClock.elapsedRealtime();
-                        Sensor sensor = new Sensor();
-                        sensor.setRssi(rssi);
-                        sensor.setName(Settings.Secure.getString(ac.getContentResolver(), Settings.Secure.ANDROID_ID));
-                        sensor.setMacAddress(gatt.getDevice().getAddress());
-                        updateSensorParameters(sensor);
-                    }
-				}
         	}
 			// Continue with the next operation
 			queue( new BLENone() );
@@ -715,123 +603,7 @@ public class BLETechnology extends ResultReceiver implements Technology {
 
         @Override
         public void onCharacteristicChanged( BluetoothGatt gatt, BluetoothGattCharacteristic characteristic ) {
-			//AppUtils.logger( 'i', TAG, String.valueOf(SystemClock.elapsedRealtime() - elapsed) );
-			//elapsed = SystemClock.elapsedRealtime();
-
-			sendSensorValue( gatt, characteristic );
         }
-
-        private byte[] getEnableByteArray(List<Byte> byteList){
-            Byte[] ENABLE_SENSOR;
-
-            if(byteList.size() > 0) {
-                ENABLE_SENSOR = new Byte[byteList.size()];
-                ENABLE_SENSOR = byteList.toArray(ENABLE_SENSOR);
-            }else
-                ENABLE_SENSOR = new Byte[]{0x00};
-
-            return ArrayUtils.toPrimitive(ENABLE_SENSOR);
-        }
-
-        /**
-         * Enables sensor and notifications of a service
-         * @param gatt The Gatt connection in BLE
-         * @param sensor The representation of the sensors
-         */
-        private void subscribe( BluetoothGatt gatt, Sensor sensor ) {
-			AppUtils.logger( 'i', TAG, "=>Enabling " + sensor.getName() );
-			mServices.add( sensor.getUuidSer() );
-			// Get enabler code
-            byte[] ENABLE_SENSOR = getEnableByteArray(sensor.getEnable());
-			//ENABLE_SENSOR[0] = sensor.getEnable();
-
-			// Get UUIDs of the service, data and configurations
-			final UUID UUID_SERV = UUID.fromString(sensor.getUuidSer());
-			final UUID UUID_DATA = UUID.fromString(sensor.getUuidData());
-			final UUID UUID_CONF = UUID.fromString(sensor.getUuidConf());
-			final UUID UUID_CALI = sensor.getUuidCali() != null ? UUID.fromString(sensor.getUuidCali()) : null;
-			// Get the service and characteristics by UUID
-			BluetoothGattService serv = gatt.getService( UUID_SERV );
-			BluetoothGattCharacteristic characteristic = serv.getCharacteristic( UUID_DATA );
-			// Get configuration descriptor
-			BluetoothGattDescriptor config = characteristic.getDescriptor( CONFIG_DESCRIPTOR );
-			gatt.setCharacteristicNotification( characteristic, true );
-			// Check if the device requires calibration
-			if( UUID_CALI != null ) {
-				mCalibration = UUID_CALI;
-				//mSensor = sensor;
-				BluetoothGattCharacteristic configuration = serv.getCharacteristic( UUID_CONF );
-				queue( new BLEWrite( gatt, configuration, CALIBRATION_DATA ) );
-
-				BluetoothGattCharacteristic calibration = serv.getCharacteristic( UUID_CALI );
-				queue( new BLERead( gatt, calibration ) );
-			}
-			// Check if the device requires to be enabled
-			if( UUID_CONF != null ) {
-				BluetoothGattCharacteristic configuration = serv.getCharacteristic( UUID_CONF );
-				queue( new BLEWrite( gatt, configuration, ENABLE_SENSOR ) );
-			}
-			// Enable the notifications for the service
-			queue( new BLEWrite( gatt, config, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE ) );
-
-        }
-
-		/**
-		 * Enables sensor and notifications of a service
-		 * @param gatt The Gatt connection in BLE
-		 * @param sensor The representation of the actuator
-		 */
-		private void activate( BluetoothGatt gatt, Sensor sensor ) {
-			mServices.add( sensor.getUuidSer() );
-
-			// Get enabler code
-			byte[] REMOTE_MODE = getEnableByteArray(sensor.getEnable());
-			byte[] INITIATE = new byte[]{0x00};
-
-			// Get UUIDs of the service, data and configurations
-			UUID UUID_SERV = UUID.fromString(sensor.getUuidSer());
-			UUID UUID_DATA = UUID.fromString(sensor.getUuidData());
-			UUID UUID_CONF = UUID.fromString(sensor.getUuidConf());
-
-			// Get the service and characteristics by UUID
-			BluetoothGattService service = gatt.getService( UUID_SERV );
-			BluetoothGattCharacteristic configuration = service.getCharacteristic( UUID_CONF );
-
-			BluetoothGattCharacteristic data = service.getCharacteristic( UUID_DATA );
-			queue( new BLEWrite( gatt, data, INITIATE ) );
-
-			queue( new BLEWrite( gatt, configuration, REMOTE_MODE ) );
-		}
-
-		@SuppressWarnings("unused")
-		public void onEvent( SendActuatorData sendActuatorData ) {
-			ArrayList<Sensor> arrayList = mDeviceModules.get(mGatt.getDevice().getName());
-			Sensor sensor = null;
-			for(int i=0;i<arrayList.size();i++){
-				Sensor s = arrayList.get(i);
-				if(s.getUuidData().equals(sendActuatorData.getUuidData()))
-					sensor = s;
-
-			}
-
-			if(sensor != null)
-				executeCommandActuator(sensor, sendActuatorData.getCommand());
-		}
-
-		/**
-		 * Enables sensor and notifications of a service
-		 * @param sensor The representation of the actuator
-		 */
-		private void executeCommandActuator( Sensor sensor, byte[] COMMAND ) {
-			// Get UUIDs of the service, data
-			UUID UUID_SERV = UUID.fromString(sensor.getUuidSer());
-			UUID UUID_DATA = UUID.fromString(sensor.getUuidData());
-
-			// Get the service and characteristics by UUID
-			BluetoothGattService service = mGatt.getService( UUID_SERV );
-			BluetoothGattCharacteristic data = service.getCharacteristic( UUID_DATA );
-			queue( new BLEWrite( mGatt, data, COMMAND ) );
-		}
 
         /**
          * Refresh the cache information of the GATT
@@ -890,44 +662,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
 		}
 
 		/**
-		 * Gets the sensor value from the characteristic by applying the respective transformation
-		 * @param gatt The gatt of the device
-		 * @param characteristic The characteristic with raw values
-		 */
-		private void sendSensorValue( BluetoothGatt gatt, BluetoothGattCharacteristic characteristic ) {
-			ConcurrentHashMap<String, Long> map = mDeviceSensorTimes.get(gatt.getDevice().getAddress());
-
-			if (SystemClock.elapsedRealtime() - map.get(characteristic.getUuid().toString()) < TIME_UPDATE_REFRESH)
-				return;
-
-			map.put(characteristic.getUuid().toString(), SystemClock.elapsedRealtime());
-
-			if(mActiveRequest.containsKey(gatt.getDevice().getAddress())){
-				ConcurrentHashMap<String, ArrayList<String>> concurrentHashMap = mActiveRequest.get(gatt.getDevice().getAddress());
-				if(concurrentHashMap.containsKey(characteristic.getUuid().toString())){
-
-					ArrayList<String> arrayList = concurrentHashMap.get(characteristic.getUuid().toString());
-
-					if(arrayList.size() > 0) {
-						Sensor sensor = new Sensor();
-						sensor.setValue(characteristic.getValue());
-						sensor.setUuidData(characteristic.getUuid().toString());
-						sensor.setCalibrationData(mCalibrationData);
-						sensor.setName(gatt.getDevice().getName());
-						sensor.setMacAddress(gatt.getDevice().getAddress());
-						convertSensorData(sensor);
-
-						listener.onMObjectValueRead(mMOUUID, mRSSI, characteristic.getService().getUuid().toString(), new Double[]{1.0});
-					}
-				}
-			}else
-				listener.onMObjectValueRead( mMOUUID, mRSSI, characteristic.getService().getUuid().toString(), new Double[]{0.0} );
-
-
-
-		}
-
-		/**
 		 * Disconnects from a device, either for an error or disconnection call
 		 * @param gatt The BluetoothGahtt of the connection
 		 * @param macAddress The address of the device
@@ -942,13 +676,6 @@ public class BLETechnology extends ResultReceiver implements Technology {
 			mConnectedDevices.remove( macAddress );
 			// Inform to the S2PA Service
 			listener.onMObjectDisconnected( mMOUUID, mServices );
-
-            EventBus.getDefault().unregister( this );
-
-			Sensor sensor = new Sensor();
-			sensor.setName(Settings.Secure.getString(ac.getContentResolver(), Settings.Secure.ANDROID_ID));
-			sensor.setMacAddress(gatt.getDevice().getAddress());
-			removeSensorMobileHub(sensor);
 		}
  	}
  	

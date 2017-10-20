@@ -6,14 +6,17 @@ public class BuyAnalyticsData implements Serializable {
 
     private static final long serialVersionUID = 25L;
 
+    /** Attributes */
     private int option;
     private double value;
     private String macAddress;
     private String uuidData, uuidIotrade, uuidAnalyticsHub;
 
+    /** Constructor */
     public BuyAnalyticsData() {
     }
 
+    /** Getters */
     public int getOption() {
         return this.option;
     }
@@ -37,7 +40,9 @@ public class BuyAnalyticsData implements Serializable {
     public double getValue() {
         return value;
     }
+    /** Getters */
 
+    /** Setters */
     public void setUuidData( String uuidData ) {
         this.uuidData = uuidData;
     }
@@ -61,5 +66,6 @@ public class BuyAnalyticsData implements Serializable {
     public void setValue( double value ) {
         this.value = value;
     }
+    /** Setters */
 
 }

@@ -196,10 +196,14 @@ public class S2PAService extends Service implements TechnologyListener {
         Intent iLoc  = new Intent( ac, LocationService.class );
         Intent iAdap = new Intent( ac, AdaptationService.class );
         Intent iMepa = new Intent( ac, MEPAService.class );
+        Intent iMonitor = new Intent( ac, NetworkMonitorService.class );
 
 		// stop all services
         if( AppUtils.isMyServiceRunning( ac, ConnectionService.class.getName() ) )
             stopService( iConn );
+
+        if( AppUtils.isMyServiceRunning( ac, NetworkMonitorService.class.getName() ) )
+            stopService( iMonitor );
 
         if( AppUtils.isMyServiceRunning( ac, AdaptationService.class.getName() ) )
             stopService( iAdap );
@@ -218,6 +222,8 @@ public class S2PAService extends Service implements TechnologyListener {
                 startService( iLoc );
 
             startService( iAdap );
+
+            startService( iMonitor );
 
             if( AppUtils.getCurrentMEPAService( ac ) )
                 startService( iMepa );

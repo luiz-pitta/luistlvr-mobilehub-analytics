@@ -48,6 +48,7 @@
         <service android:name=".services.LocationService" />
         <service android:name=".services.AdaptationService" />
         <service android:name=".services.MEPAService" />
+        <service android:name=".services.NetworkMonitorService" />
 
         <!-- End Services -->
 

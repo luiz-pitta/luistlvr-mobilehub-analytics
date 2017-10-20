@@ -249,7 +249,7 @@ public class AppConfig {
 	 * 
 	 * Default: onDevelopment --// not set //--
 	 */
-	public static final String DEFAULT_SDDL_IP_ADDRESS = "139.82.100.71";
+	public static final String DEFAULT_SDDL_IP_ADDRESS = "192.168.25.34";
 	
 	/*
 	 * Default value for the port used by the SDDL.

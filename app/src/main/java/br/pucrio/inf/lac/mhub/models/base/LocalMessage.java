@@ -61,6 +61,7 @@ public abstract class LocalMessage implements Serializable {
     protected static final String UUID_MATCH = "uuidMatch";
     protected static final String UUID_CLIENT   = "uuidClient";
     protected static final String UUID_ANALYTICS_CLIENT   = "uuidAnalyticsClient";
+    protected static final String ACK   = "ack";
     protected static final String UUID_DATA = "uuidData";
     protected static final String MAC_ADDRESS   = "macAddress";
     protected static final String START_STOP   = "startStop";

@@ -7,6 +7,10 @@ import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 import retrofit2.converter.gson.GsonConverterFactory;
 
+/**
+ * Network base function using REST Api (Retrofit)
+ * @author Luiz Guilherme Pitta
+ */
 public class NetworkUtil {
 
     public static RetrofitInterface getRetrofit(){

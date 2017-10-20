@@ -76,8 +76,6 @@ public class LocationService extends Service implements LocationListener {
 
     private UUID uuid;
 
-
-
     /**
      * Class for clients to access. Because we know this service always runs in
      * the same process as its clients, we don't need to deal with IPC.
@@ -109,6 +107,7 @@ public class LocationService extends Service implements LocationListener {
 		// get location manager 
 		lm = (LocationManager) getSystemService( LOCATION_SERVICE );
 
+        // component to make request to server
         mSubscriptions = new CompositeDisposable();
 
 		// Configurations
@@ -123,7 +122,6 @@ public class LocationService extends Service implements LocationListener {
 	@Override
 	public void onDestroy() {
 		super.onDestroy();
-        setMobileHubDisabled();
 
         AppUtils.logger( 'i', TAG, ">> DESTROYED" );
         // unregister broadcast
@@ -132,21 +130,20 @@ public class LocationService extends Service implements LocationListener {
         if( lm != null )
 		    lm.removeUpdates( this );
 
+        // destroy component that makes request to server to avoid memory leak
         mSubscriptions.dispose();
 	}
-
-    private void setMobileHubDisabled() {
-        Intent intent = new Intent("disable_mobile_hub");
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
-    }
 
     @Override
     public IBinder onBind(Intent intent) {
         return mBinder;
     }
 
-
-
+    /**
+     * It gets called when the service is updates user's location.
+     *
+     * @param usr register user location.
+     */
     private void registerAnalytics(User usr) {
 
         mSubscriptions.add(NetworkUtil.getRetrofit().setAnalyticsMobileHub(usr)
@@ -155,9 +152,19 @@ public class LocationService extends Service implements LocationListener {
                 .subscribe(this::handleResponse,this::handleError));
     }
 
+    /**
+     * Callback called when updates user's location returns successfully.
+     *
+     * @param response register user location.
+     */
     private void handleResponse(Response response) {
     }
 
+    /**
+     * Callback called when updates user's location returns with error.
+     *
+     * @param error returns the error.
+     */
     private void handleError(Throwable error) {
 
     }

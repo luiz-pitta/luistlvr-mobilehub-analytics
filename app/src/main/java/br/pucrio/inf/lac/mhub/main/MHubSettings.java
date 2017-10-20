@@ -28,11 +28,14 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.infopae.model.BuyAnalyticsData;
 import com.infopae.model.SendActuatorData;
 import com.infopae.model.SendAnalyticsData;
 import com.infopae.model.SendSensorData;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Random;
@@ -54,6 +57,7 @@ import br.pucrio.inf.lac.mhub.models.base.QueryMessage;
 import br.pucrio.inf.lac.mhub.models.locals.SensorData;
 import br.pucrio.inf.lac.mhub.models.queries.MEPAQuery;
 import br.pucrio.inf.lac.mhub.network.NetworkUtil;
+import br.pucrio.inf.lac.mhub.services.ConnectionService;
 import br.pucrio.inf.lac.mhub.services.LocationService;
 import br.pucrio.inf.lac.mhub.services.MEPAService;
 import br.pucrio.inf.lac.mhub.services.S2PAService;
@@ -81,8 +85,10 @@ public class MHubSettings extends AppCompatActivity implements ListView.OnItemCl
     /** Progress dialog for disconnection */
     private ProgressDialog disconnectDialog;
 
+    /** Component to make server request */
     private CompositeDisposable mSubscriptions;
 
+    /** BroadcastReceiver */
     private BroadcastReceiver mMessageReceiverDisable = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -117,6 +123,9 @@ public class MHubSettings extends AppCompatActivity implements ListView.OnItemCl
         EventBus.getDefault().unregister( this );
     }
 
+    /**
+     * The method used to logout analytics user.
+     */
     private void setMobileHubDisabled() {
         UUID uuid = AppUtils.getUuid( ac );
         SharedPreferences config = ac.getSharedPreferences( AppConfig.SHARED_PREF_FILE, MODE_PRIVATE );
@@ -132,6 +141,10 @@ public class MHubSettings extends AppCompatActivity implements ListView.OnItemCl
             registerAnalytics(user);
     }
 
+    /**
+     * The method used to register state in server of analytics user.
+     * @param usr The new location object.
+     */
     private void registerAnalytics(User usr) {
 
         mSubscriptions.add(NetworkUtil.getRetrofit().setAnalyticsMobileHub(usr)
@@ -140,9 +153,19 @@ public class MHubSettings extends AppCompatActivity implements ListView.OnItemCl
                 .subscribe(this::handleResponse,this::handleError));
     }
 
+    /**
+     * Callback called when updates user's state returns successfully.
+     *
+     * @param response register user state.
+     */
     private void handleResponse(Response response) {
     }
 
+    /**
+     * Callback called when updates user's state returns with error.
+     *
+     * @param error returns the error.
+     */
     private void handleError(Throwable error) {
 
     }
@@ -189,6 +212,8 @@ public class MHubSettings extends AppCompatActivity implements ListView.OnItemCl
 		switch( item.getItemId() ) {
 			case R.id.service_state:
 				if( AppUtils.isMyServiceRunning( ac, S2PAService.class.getName() ) ) {
+                    setMobileHubDisabled();
+
 					item.setIcon( android.R.drawable.ic_media_play );
                     // Show loading while disconnecting
                     if( connState != null && connState.getState().equals( ConnectionData.CONNECTED ) ) {
