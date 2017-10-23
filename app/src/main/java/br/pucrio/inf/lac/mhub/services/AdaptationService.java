@@ -51,7 +51,6 @@ public class AdaptationService extends Service {
     public static final int FAILED  = 0;
     public static final int SUCCESS = 1;
 
-    private CompositeDisposable mSubscriptions;
     private ResultReceiver receiver;
 
     /**
@@ -83,8 +82,6 @@ public class AdaptationService extends Service {
         // Configurations
         bootstrap();
 
-        mSubscriptions = new CompositeDisposable();
-
         // if the service is killed by Android, service starts again
         return START_STICKY;
     }
@@ -96,8 +93,6 @@ public class AdaptationService extends Service {
     public void onDestroy() {
         super.onDestroy();
         AppUtils.logger( 'i', TAG, ">> Destroyed" );
-        if(mSubscriptions != null)
-            mSubscriptions.dispose();
         // unregister from event bus
         EventBus.getDefault().unregister( this );
     }

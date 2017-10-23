@@ -156,7 +156,7 @@ public class MHubSettings extends AppCompatActivity implements ListView.OnItemCl
     /**
      * Callback called when updates user's state returns successfully.
      *
-     * @param response register user state.
+     * @param response user state.
      */
     private void handleResponse(Response response) {
     }
