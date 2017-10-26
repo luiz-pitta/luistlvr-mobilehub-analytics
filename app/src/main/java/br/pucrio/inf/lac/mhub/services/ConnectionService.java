@@ -22,6 +22,7 @@ import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
@@ -170,7 +171,7 @@ public class ConnectionService extends Service {
 		sendSensorData.setUuidClients(getAllUuidList());
 
 		if(sendSensorData.getUuidClients().size() > 0)
-			createAndSendMsg(sendSensorData, uuid);
+			createAndQueueMsg(sendSensorData, uuid);
 
 		// unregister broadcasts 
 		unregisterBroadcasts();
@@ -266,7 +267,7 @@ public class ConnectionService extends Service {
 	private void calculateOption(BuyAnalyticsData buyAnalyticsData, String uuid, String macAddress, long interval){
 		SendSensorData sendSensorData = new SendSensorData();
 		ArrayList<String> listUuid = new ArrayList<>();
-		ArrayList<Double[]> data = mActiveRequest.get(macAddress).get(uuid);
+		ArrayList<Double[]> data = new ArrayList<>(mActiveRequest.get(macAddress).get(uuid));
 		String uuidClient = buyAnalyticsData.getUuidIotrade();
 		int option = buyAnalyticsData.getOption();
 
@@ -377,11 +378,11 @@ public class ConnectionService extends Service {
 		}
 
 		if(option != ALERT)
-			createAndSendMsg(sendSensorData, this.uuid);
+            createAndQueueMsg(sendSensorData, this.uuid);
 		else {
 			sendSensorData.setListData(new ArrayList<>());
 			sendSensorData.setData(null);
-			createAndSendMsg(sendSensorData, this.uuid);
+            createAndSendMsg(sendSensorData, this.uuid);
 			EventBus.getDefault().post(sensorData);
 		}
 	}
@@ -396,30 +397,32 @@ public class ConnectionService extends Service {
 		boolean ack = matchmakingData.isAck();
 
 		if(ack)
-			createAndSendMsg( "a" + uuidClientAnalytics, uuid);
+            createAndSendMsg( "a" + uuidClientAnalytics, uuid);
 
 		if(matchmakingData.getStartStop() == MatchmakingData.STOP) {
 			ConcurrentHashMap<String, ArrayList<BuyAnalyticsData>> map = mActiveRequestOption.get(macAddress);
-			ArrayList<BuyAnalyticsData> arrayList = map.get(uuidData);
-			int position = getUuidIoTrade(arrayList, uuidClientAnalytics);
+			if(map != null) {
+				ArrayList<BuyAnalyticsData> arrayList = map.get(uuidData);
+				int position = getUuidIoTrade(arrayList, uuidClientAnalytics);
 
-			if (position >= 0) {
-				BuyAnalyticsData buyAnalyticsData = arrayList.get(position);
-				if(buyAnalyticsData.getOption() == 1){
-					MEPAQuery mepa = new MEPAQuery();
-					mepa.setLabel(uuidClientAnalytics);
-					mepa.setObject(QueryMessage.ITEM.RULE);
-					mepa.setType(QueryMessage.ACTION.REMOVE);
-					EventBus.getDefault().post(mepa);
-				}
+				if (position >= 0) {
+					BuyAnalyticsData buyAnalyticsData = arrayList.get(position);
+					if (buyAnalyticsData.getOption() == 1) {
+						MEPAQuery mepa = new MEPAQuery();
+						mepa.setLabel(uuidClientAnalytics);
+						mepa.setObject(QueryMessage.ITEM.RULE);
+						mepa.setType(QueryMessage.ACTION.REMOVE);
+						EventBus.getDefault().post(mepa);
+					}
 
-				arrayList.remove(position);
-				map.put(uuidData, arrayList);
+					arrayList.remove(position);
+					map.put(uuidData, arrayList);
 
-				if(arrayList.size() == 0) {
-					ConcurrentHashMap<String, ArrayList<Double[]>> mapInfo = mActiveRequest.get(macAddress);
-					if (mapInfo.containsKey(uuidData))
-						mapInfo.remove(uuidData);
+					if (arrayList.size() == 0) {
+						ConcurrentHashMap<String, ArrayList<Double[]>> mapInfo = mActiveRequest.get(macAddress);
+						if (mapInfo.containsKey(uuidData))
+							mapInfo.remove(uuidData);
+					}
 				}
 			}
 		}
@@ -627,53 +630,60 @@ public class ConnectionService extends Service {
 			AppUtils.logger( 'e', TAG, ">> isConnected flag not saved" );
 	}
 
-    /**
-     * Creates an application message to send to the cloud in JSON
-     * It includes the current location if exists to the message
-     * Depending on the priority it will send the message immediately
-     * or group it to be sent in an interval of time
-     * @param s The Mobile Hub Message structure
-     * @param sender The UUID of the Mobile Hub
-     */
-    private void createAndQueueMsg(LocalMessage s, UUID sender) {
-        s.setUuid( sender.toString() );
-        Double latitude = null, longitude = null;
+	/**
+	 * Creates an application message to send to the cloud in JSON
+	 * It includes the current location if exists to the message
+	 * Depending on the priority it will send the message immediately
+	 * or group it to be sent in an interval of time
+	 * @param s The Mobile Hub Message structure
+	 * @param sender The UUID of the Mobile Hub
+	 */
+	private void createAndQueueJsonMsg(LocalMessage s, UUID sender) {
+		s.setUuid( sender.toString() );
 
-        // If location service not activated, set location
-        if( !AppUtils.getCurrentLocationService( ac ) ) {
-            latitude = AppUtils.getLocationLatitude( ac );
-            longitude = AppUtils.getLocationLongitude( ac );
-        }
-        // The last known location
-        else if( lastLocation != null ) {
-            latitude = lastLocation.getLatitude();
-            longitude = lastLocation.getLongitude();
-        }
+		try {
+			ApplicationMessage am = new ApplicationMessage();
+			am.setPayloadType( PayloadSerialization.JSON );
+			am.setContentObject( s.toJSON() );
+			am.setTagList( new ArrayList<String>() );
+			am.setSenderID( sender );
 
-        if( latitude != null && longitude != null ) {
-            s.setLatitude( latitude );
-            s.setLongitude( longitude );
-        }
-
-        try {
-            ApplicationMessage am = new ApplicationMessage();
-            am.setPayloadType( PayloadSerialization.JSON );
-            am.setContentObject( s.toJSON() );
-            am.setTagList( new ArrayList<String>() );
-            am.setSenderID( sender );
-
-            if( s.getPriority().equals( LocalMessage.HIGH ) ) {
-                connection.sendMessage( am );
-            } else {
-                synchronized( lstMsg ) {
-                    lstMsg.put( s.getID(), am );
+			if( s.getPriority().equals( LocalMessage.HIGH ) ) {
+				connection.sendMessage( am );
+			} else {
+				synchronized( lstMsg ) {
+					lstMsg.put( s.getID(), am );
 					//lstMsg.add( am );
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Creates an application message to send to the cloud
+	 * It includes the current location if exists to the message
+	 * Depending on the priority it will send the message immediately
+	 * or group it to be sent in an interval of time
+	 * @param s The Mobile Hub Message structure
+	 * @param sender The UUID of the Mobile Hub
+	 */
+	private void createAndQueueMsg(Serializable s, UUID sender) {
+		try {
+			ApplicationMessage am = new ApplicationMessage();
+			am.setContentObject( s );
+			am.setTagList( new ArrayList<String>() );
+			am.setSenderID( sender );
+
+			synchronized( lstMsg ) {
+				lstMsg.put( s.toString(), am );
+				//lstMsg.add( am );
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 
 	/**
 	 * Creates an application message to send to the cloud
@@ -711,59 +721,17 @@ public class ConnectionService extends Service {
 		    lbm.unregisterReceiver( mConnBroadcastReceiver );
 	}
 
-    @SuppressWarnings("unused") // it's actually used to receive events from the Location Service
-    public void onEvent( LocationData locData ) {
-        if( locData != null && AppUtils.isInRoute( ROUTE_TAG, locData.getRoute() ) ) {
-			AppUtils.logger( 'i', TAG, ">> NEW_LOCATION_MSG" );
-            //create the message
-            locData.setConnectionType( deviceTypeConnectivity );
-            // set the battery status
-            IntentFilter battFilter = new IntentFilter( Intent.ACTION_BATTERY_CHANGED );
-            Intent iBatt = ac.registerReceiver( null, battFilter );
-
-            // No battery present
-            if( iBatt == null ) {
-                AppUtils.logger( 'e', TAG, "No Battery Present" );
-            } else {
-                int level = iBatt.getIntExtra( BatteryManager.EXTRA_LEVEL, -1 );
-                float scale = iBatt.getIntExtra( BatteryManager.EXTRA_SCALE, -1 );
-                int battLevel = (int) ( ( level / scale ) * 100 );
-                locData.setBatteryPercent( battLevel );
-                // set the battery charging
-                int charging = iBatt.getIntExtra( BatteryManager.EXTRA_STATUS, -1 );
-                locData.setCharging( charging == BatteryManager.BATTERY_STATUS_CHARGING );
-            }
-
-            // save the last location (used when a new msg is send)
-            lastLocation = locData;
-            // add the message to the queue
-            //createAndQueueMsg( locData, uuid );
-        }
-    }
-
-    @SuppressWarnings("unused") // it's actually used to receive events from the S2PA Service
-    public void onEvent( SensorData sensorData ) {
-        // Look if the message is for this service
-        //if( sensorData != null && AppUtils.isInRoute( ROUTE_TAG, sensorData.getRoute() ) )
-		//	createAndQueueMsg( sensorData, uuid );
-    }
-
     @SuppressWarnings("unused") // it's actually used to receive events from the MEPA Service
     public void onEvent( EventData eventData ) {
         // Look if the message is for this service
         if( eventData != null && AppUtils.isInRoute( ROUTE_TAG, eventData.getRoute() ) )
-			createAndQueueMsg( eventData, uuid );
-    }
-
-    @SuppressWarnings("unused") // it's actually used to receive error events
-    public void onEvent( MessageData messageData ) {
-        //createAndQueueMsg( messageData, uuid );
+			createAndQueueJsonMsg( eventData, uuid );
     }
 
 	@SuppressWarnings("unused")	// it's actually used to receive events from the Connection Listener
 	public void onEvent( SendSensorData sendSensorData ) {
 		if( sendSensorData != null ) {
-			createAndSendMsg( sendSensorData, uuid );
+            createAndQueueMsg( sendSensorData, uuid );
 		}
 	}
 
@@ -772,8 +740,9 @@ public class ConnectionService extends Service {
 	 */
 	private ArrayList<String> getAllUuidList() {
 		ArrayList<String> list = new ArrayList<>();
-		for (String key : mActiveRequestOption.keySet()) {
-			for (String key2 : mActiveRequestOption.get(key).keySet()) {
+
+		for (String key : Collections.list(mActiveRequestOption.keys())) {
+			for (String key2 : Collections.list(mActiveRequestOption.get(key).keys())) {
 				ArrayList<BuyAnalyticsData> arrayList = mActiveRequestOption.get(key).get(key2);
 				for(BuyAnalyticsData buyAnalyticsData : arrayList){
 					list.add(buyAnalyticsData.getUuidIotrade());

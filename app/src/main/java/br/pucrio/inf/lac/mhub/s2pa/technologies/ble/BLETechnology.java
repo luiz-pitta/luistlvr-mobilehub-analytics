@@ -28,6 +28,7 @@ import org.apache.commons.lang3.ArrayUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
@@ -207,7 +208,7 @@ public class BLETechnology extends ResultReceiver implements Technology {
 		sOperationsQueue.clear();
         sCurrentOperation = null;
 
-        for( String macAddress : mConnectedDevices.keySet() )
+        for( String macAddress : Collections.list(mConnectedDevices.keys()) )
             disconnect( macAddress );
 
         mConnectedDevices.clear();
