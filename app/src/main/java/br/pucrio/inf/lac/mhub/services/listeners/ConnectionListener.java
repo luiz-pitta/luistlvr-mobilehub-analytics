@@ -94,9 +94,6 @@ public class ConnectionListener implements NodeConnectionListener {
 				EventBus.getDefault().post( matchmakingData );
 			}catch (Exception ex){
 			}
-		}else if(m.getContentObject() instanceof SendActuatorData) {
-			SendActuatorData sendActuatorData = (SendActuatorData) m.getContentObject();
-			EventBus.getDefault().post( sendActuatorData );
 		}else if(m.getContentObject() instanceof SendSensorData) {
 			SendSensorData sendSensorData = (SendSensorData)m.getContentObject();
 			EventBus.getDefault().post( sendSensorData );

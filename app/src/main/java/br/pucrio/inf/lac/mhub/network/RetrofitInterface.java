@@ -1,7 +1,6 @@
 package br.pucrio.inf.lac.mhub.network;
 
 import br.pucrio.inf.lac.mhub.model_server.Response;
-import br.pucrio.inf.lac.mhub.model_server.Sensor;
 import br.pucrio.inf.lac.mhub.model_server.User;
 import io.reactivex.Observable;
 import retrofit2.http.Body;

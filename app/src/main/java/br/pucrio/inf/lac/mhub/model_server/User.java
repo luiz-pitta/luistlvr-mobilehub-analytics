@@ -18,6 +18,7 @@ public class User implements Serializable {
     private double lat, lng;
     private float accuracy;
     private UUID uuid;
+    private double velocity;
     private boolean active = false;
 
     /** Getters */
@@ -51,6 +52,10 @@ public class User implements Serializable {
     /** Getters */
 
     /** Setters */
+    public void setVelocity(double velocity) {
+        this.velocity = velocity;
+    }
+
     public void setLat(double lat) {
         this.lat = lat;
     }

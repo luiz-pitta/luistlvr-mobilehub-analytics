@@ -76,6 +76,9 @@ public class LocationService extends Service implements LocationListener {
 
     private UUID uuid;
 
+    /** latitude and longitude */
+    private double lat = -500, lng = -500;
+
     /**
      * Class for clients to access. Because we know this service always runs in
      * the same process as its clients, we don't need to deal with IPC.
@@ -193,9 +196,18 @@ public class LocationService extends Service implements LocationListener {
         user.setDevice(Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID));
         user.setBatery(AppUtils.getBatteryPercentage(ac));
         user.setSignal(AppUtils.getInternetSignal(ac));
+        user.setLat(location.getLatitude());
+        user.setLng(location.getLongitude());
         user.setActive(true);
+        if(lat != -500)
+            user.setVelocity(AppUtils.getDistanceFromLatLonInKm(lat, lng, user.getLat(), user.getLng()));
+        else
+            user.setVelocity(0);
 
         registerAnalytics(user);
+
+        lat = location.getLatitude();
+        lng = location.getLongitude();
 
         // Wait until we get a good enough location
         if( isBetterLocation( lastRegisteredLocation, location ) ) {
